@@ -132,7 +132,7 @@ func detectPatternLeg(text string, st *AircraftState) string {
 		return ""
 	}
 
-	if containsAny(t, "straight in", "straight-in") {
+	if containsAny(t, "straight in", "straight-in", "direct approach", "direct-in", "direct in") {
 		if containsAny(t, "short final", "on final", "full stop") {
 			return legFinal
 		}
