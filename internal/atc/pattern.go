@@ -18,8 +18,10 @@ const (
 	legFinal    = "final"
 	legLanded   = "landed"
 	legThanks   = "thanks"
+	legGreeting = "greeting"
 	legAirborne = "airborne"
 	legSignoff  = "signoff"
+	legStraight = "straight"
 )
 
 // handlePatternCall intercepts overhead / departure / courtesy calls so
@@ -48,7 +50,7 @@ func (t *Tower) handlePatternCall(call radio.ReceivedCall) bool {
 		pilot = st.Callsign
 	}
 	role := RoleTower
-	if st != nil && st.OnGround && (leg == legThanks || leg == legSignoff || leg == legLanded) {
+	if st != nil && st.OnGround && (leg == legThanks || leg == legGreeting || leg == legSignoff || leg == legLanded) {
 		role = t.airRole(af, true)
 	}
 	cs := t.cfgCallsign(af, role)
@@ -112,6 +114,11 @@ func detectPatternLeg(text string, st *AircraftState) string {
 		"have a good", "no further", "that was accurate", "appreciate it", "appreciate that") {
 		return legThanks
 	}
+	if containsAny(t, "good morning", "good afternoon", "good evening",
+		"how are you", "how's it going", "hows it going", "how are ya",
+		"morning tower", "evening tower") {
+		return legGreeting
+	}
 	if containsAny(t, "leaving your frequency", "frequency change approved",
 		"switching to departure", "contact departure", "off your frequency") {
 		return legSignoff
@@ -125,7 +132,16 @@ func detectPatternLeg(text string, st *AircraftState) string {
 		return ""
 	}
 
+	if containsAny(t, "straight in", "straight-in") {
+		if containsAny(t, "short final", "on final", "full stop") {
+			return legFinal
+		}
+		return legStraight
+	}
 	if containsAny(t, "short final", "on final", "on the numbers", "short finals", "rolling out") {
+		return legFinal
+	}
+	if containsAny(t, "full stop") && containsAny(t, "approach", "landing", "final") {
 		return legFinal
 	}
 	if containsAny(t, "turning base", "on base", "base leg", "turning to base") {
@@ -170,6 +186,23 @@ func patternReply(leg string, st *AircraftState, pilot, station, runway, wind st
 	case legThanks:
 		msg = fmt.Sprintf("%s, %s, roger, good day.", pilot, station)
 		return msg, cur, false, false
+	case legGreeting:
+		msg = fmt.Sprintf("%s, %s, good day, go ahead.", pilot, station)
+		return msg, cur, false, false
+	case legStraight:
+		if wind != "" {
+			msg = fmt.Sprintf("%s, %s, continue straight in, report final. %s. %s.", pilot, station, wind, runway)
+		} else {
+			msg = fmt.Sprintf("%s, %s, continue straight in, report final, %s.", pilot, station, runway)
+		}
+		return msg, legStraight, false, false
+	case legFinal:
+		if already {
+			msg = fmt.Sprintf("%s, %s, continue, cleared to land %s, full stop.", pilot, station, runway)
+		} else {
+			msg = fmt.Sprintf("%s, %s, %s, cleared to land, full stop.", pilot, station, runway)
+		}
+		return msg, legFinal, true, false
 	case legSignoff:
 		msg = fmt.Sprintf("%s, %s, frequency change approved, good day.", pilot, station)
 		return msg, cur, false, false
@@ -199,13 +232,6 @@ func patternReply(leg string, st *AircraftState, pilot, station, runway, wind st
 			msg = fmt.Sprintf("%s, %s, %s, cleared to land.", pilot, station, runway)
 		}
 		return msg, legBase, true, false
-	case legFinal:
-		if already {
-			msg = fmt.Sprintf("%s, %s, continue, cleared to land %s.", pilot, station, runway)
-		} else {
-			msg = fmt.Sprintf("%s, %s, %s, cleared to land.", pilot, station, runway)
-		}
-		return msg, legFinal, true, false
 	}
 	_ = reset
 	return "", cur, false, false
