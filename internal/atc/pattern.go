@@ -21,7 +21,8 @@ const (
 	legGreeting = "greeting"
 	legAirborne = "airborne"
 	legSignoff  = "signoff"
-	legStraight = "straight"
+	legStraight  = "straight"
+	legEmergency = "emergency"
 )
 
 // handlePatternCall intercepts overhead / departure / courtesy calls so
@@ -95,6 +96,11 @@ func detectPatternLeg(text string, st *AircraftState) string {
 	t := strings.ToLower(strings.TrimSpace(text))
 	if t == "" {
 		return ""
+	}
+	if containsAny(t, "mayday", "pan pan", "pan-pan", "declaring an emergency",
+		"declaring emergency", "emergency", "low fuel", "minimum fuel", "bingo",
+		"engine out", "flameout", "bird strike", "birdstrike") {
+		return legEmergency
 	}
 	// Never steal these — existing handlers own them.
 	if containsAny(t,
@@ -189,6 +195,13 @@ func patternReply(leg string, st *AircraftState, pilot, station, runway, wind st
 	case legGreeting:
 		msg = fmt.Sprintf("%s, %s, good day, go ahead.", pilot, station)
 		return msg, cur, false, false
+	case legEmergency:
+		if wind != "" {
+			msg = fmt.Sprintf("%s, %s, roger emergency, %s, cleared to land, full stop. %s.", pilot, station, runway, wind)
+		} else {
+			msg = fmt.Sprintf("%s, %s, roger emergency, %s, cleared to land, full stop.", pilot, station, runway)
+		}
+		return msg, legEmergency, true, false
 	case legStraight:
 		if wind != "" {
 			msg = fmt.Sprintf("%s, %s, continue straight in, report final. %s. %s.", pilot, station, wind, runway)
