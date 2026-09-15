@@ -1055,3 +1055,101 @@ func decisionFits(intent Intent, text string, d Decision) bool {
 func containsAny(text string, phrases ...string) bool {
 	for _, p := range phrases {
 		if strings.Contains(text, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func runwayLabel(af *airfield.Airfield) string {
+	if af != nil && len(af.Runways) > 0 {
+		return SpeakRunway(af.Runways[0].Name)
+	}
+	return "runway"
+}
+
+func (t *Tower) resolveCaller(call radio.ReceivedCall, preferGround bool) (*AircraftState, *airfield.Airfield, string) {
+	st := t.primaryLocked()
+	if st == nil {
+		st = t.findByPilot(call.Pilot)
+	}
+	if st == nil {
+		if preferGround {
+			st = t.nearestOnGround()
+		} else {
+			st = t.nearestInAir()
+			if st == nil {
+				st = t.nearestOnGround()
+			}
+		}
+	}
+	pilot := "Aircraft"
+	var af *airfield.Airfield
+	if st != nil {
+		if st.Callsign != "" {
+			pilot = st.Callsign
+		} else if st.Pilot != "" {
+			pilot = st.Pilot
+		}
+		af = st.Owner
+		if af == nil {
+			af = st.Nearest
+		}
+	}
+	return st, af, pilot
+}
+
+func (t *Tower) SeedDemoAircraft(airfieldID, pilot string) error {
+	af, ok := t.airfields.GetByID(airfieldID)
+	if !ok {
+		af, ok = t.airfields.GetByName(airfieldID)
+	}
+	if !ok {
+		return fmt.Errorf("unknown airfield %q", airfieldID)
+	}
+	if pilot == "" {
+		pilot = "Viper 1-1"
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	id := "demo-" + strings.ToLower(strings.ReplaceAll(pilot, " ", "-"))
+	t.aircraft[id] = &AircraftState{
+		ID:         id,
+		Pilot:      pilot,
+		Callsign:   SpeakCallsign(pilot),
+		Type:       "F-16C_50",
+		Latitude:   af.Latitude,
+		Longitude:  af.Longitude,
+		AltitudeFt: af.ElevationFt + 5,
+		OnGround:   true,
+		Nearest:    af,
+		DistanceNM: 0.1,
+		LastSeen:   time.Now(),
+		Phase:      "parked",
+	}
+	t.log.Info("seeded demo aircraft", "pilot", pilot, "airfield", af.Name)
+	return nil
+}
+
+func (t *Tower) LastCall() (callsign, text string) {
+	t.lastMu.Lock()
+	defer t.lastMu.Unlock()
+	return t.lastCallsign, t.lastText
+}
+
+func (t *Tower) Stats() (total, onGround, airborne int) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for _, st := range t.aircraft {
+		total++
+		if st.OnGround {
+			onGround++
+		} else {
+			airborne++
+		}
+	}
+	return
+}
+
