@@ -66,6 +66,11 @@ type AircraftState struct {
 	MotionVS     float64
 	Phase        string // parked, taxi, runway, departure, downwind, base, final, airborne
 	Pattern      string // overhead leg: initial, break, downwind, base, final
+	Emergency    bool
+	EmergKind    string
+	EmergAt      time.Time
+	Souls        int
+	FuelState    string
 }
 
 // Tower is a simple Tower controller.
@@ -241,6 +246,9 @@ func (t *Tower) HandleRadioCall(call radio.ReceivedCall) bool {
 	if t.handleHandoffCall(call) {
 		return true
 	}
+	if t.handleEmergencyCall(call) {
+		return true
+	}
 	if t.handlePatternCall(call) {
 		return true
 	}
@@ -355,6 +363,9 @@ func (t *Tower) snapshot(call radio.ReceivedCall) Snapshot {
 		s.PatternLeg = st.Pattern
 		s.ClearedLand = st.ClearedLand
 		s.ClearedTakeoff = st.ClearedTakeoff
+		s.Emergency = st.Emergency
+		s.EmergKind = st.EmergKind
+		s.Souls = st.Souls
 		s.Throttle = st.Throttle
 		s.Flaps = st.Flaps
 		s.EngineOff = st.HasRPM && st.EngineRPM < 0.5
@@ -776,6 +787,9 @@ func (t *Tower) handleParkingRequest(call radio.ReceivedCall) bool {
 		return true
 	}
 	msg := fmt.Sprintf("%s, %s, taxi to parking via alpha, remain this frequency.", pilot, cs)
+	if st != nil && st.Emergency {
+		msg = fmt.Sprintf("%s, %s, taxi as able, vehicles will meet you.", pilot, cs)
+	}
 	t.say(call.Frequency, cs, msg)
 	if st != nil {
 		st.LastClearance = time.Now()

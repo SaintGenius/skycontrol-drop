@@ -49,6 +49,9 @@ type Snapshot struct {
 	PatternLeg     string             `json:"pattern_leg,omitempty"`
 	ClearedLand    bool               `json:"cleared_to_land,omitempty"`
 	ClearedTakeoff bool               `json:"cleared_for_takeoff,omitempty"`
+	Emergency      bool               `json:"emergency,omitempty"`
+	EmergKind      string             `json:"emergency_kind,omitempty"`
+	Souls          int                `json:"souls_on_board,omitempty"`
 	Throttle       float64            `json:"throttle,omitempty"`
 	Flaps          float64            `json:"flaps,omitempty"`
 	EngineOff      bool               `json:"engine_off,omitempty"`
@@ -167,6 +170,16 @@ COURTESY (after the legal call is done):
 - thanks / good day / no further assistance → short "roger, good day." Do NOT recap wind, parking, or clearances.
 - Never joke, never meow, never skip a clearance to be friendly. Personality is tone, not standup.
 
+EMERGENCY (mayday, pan-pan, low fuel, bingo, engine out, bird strike):
+- Skip the overhead. Do NOT report break. Do NOT send them around.
+- Immediately: roger the emergency, runway_spoken, cleared to land, full stop.
+- Equipment standing by (not required for pan-pan).
+- If souls_on_board is 0, ask "say souls on board" once.
+- If they already said low fuel / bingo, do not ask fuel remaining.
+- If they later say souls or fuel, acknowledge only. Do not reclear.
+- On the ground: hold position, equipment rolling.
+- intent "emergency".
+
 You MAY also issue taxi / takeoff / land / go-around / hold short / startup / parking / radio check when they asked.
 
 Handoff:
@@ -185,7 +198,7 @@ You may NOT:
 Only intent "unknown" if there is no snapshot question and no clearance request.
 
 JSON only:
-{"intent":"taxi|takeoff|landing|inbound|go_around|hold_short|startup|parking|radio_check|touch_and_go|say_again|info|contact|check_in|traffic|thanks|unknown","role":"Ground|Tower|Approach","text":"..."}
+{"intent":"taxi|takeoff|landing|inbound|go_around|hold_short|startup|parking|radio_check|touch_and_go|say_again|info|contact|check_in|traffic|thanks|emergency|unknown","role":"Ground|Tower|Approach","text":"..."}
 
 text = one radio transmission. Start with the pilot callsign, then your station. 12–40 words. Speak frequencies as "two six one decimal zero". Speak TACAN as digits plus NATO letters: 31X = "three one x-ray", 16Y = "one six yankee". Never say "ex" or "why". No markdown. No extra keys.`
 
