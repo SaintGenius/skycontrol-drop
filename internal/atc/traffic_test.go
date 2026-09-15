@@ -17,7 +17,6 @@ func TestHeadingErr(t *testing.T) {
 
 func TestInboundOutbound(t *testing.T) {
 	af := &airfield.Airfield{Name: "Senaki", Latitude: 42.2406, Longitude: 42.0483}
-	// South of field, heading north → inbound
 	st := &AircraftState{Latitude: 42.20, Longitude: 42.0483, Heading: 0}
 	if !st.inbound(af) {
 		t.Fatalf("expected inbound, bearing=%v err=%v", st.bearingTo(af), headingErr(st.Heading, st.bearingTo(af)))
@@ -47,11 +46,10 @@ func TestClassifyPhase(t *testing.T) {
 	if p := classifyPhase(cold); p != "parked" {
 		t.Fatalf("cold: %s", p)
 	}
-	taxi := &AircraftState{OnGround: true, SpeedMS: 12, Nearest: af, DistanceNM: 0.3, Latitude: af.Latitude, Longitude: af.Longitude} // ~23 kt
+	taxi := &AircraftState{OnGround: true, SpeedMS: 12, Nearest: af, DistanceNM: 0.3, Latitude: af.Latitude, Longitude: af.Longitude}
 	if p := classifyPhase(taxi); p != "taxi" {
 		t.Fatalf("taxi: %s", p)
 	}
-	// North of field, heading south = inbound (toward field)
 	fin := &AircraftState{
 		OnGround: false, Latitude: 42.29, Longitude: 42.0483, Heading: 180,
 		Nearest: af, DistanceNM: 3.0, AGLFt: 1200, LandingGear: 1, AltitudeFt: 1243,
@@ -67,5 +65,21 @@ func TestClassifyPhase(t *testing.T) {
 	dep.DistanceNM = airfield.DistanceNM(dep.Latitude, dep.Longitude, af.Latitude, af.Longitude)
 	if p := classifyPhase(dep); p != "departure" {
 		t.Fatalf("departure with gear down should not be final: %s outbound=%v", p, dep.outbound(af))
+	}
+}
+
+func TestGuessMinhadAliases(t *testing.T) {
+	nearby := []airfield.Nearby{{Name: "Al Minhad"}, {Name: "Al Maktoum"}}
+	home := &airfield.Airfield{Name: "Al Maktoum"}
+	cases := []string{
+		"Aminad Tower, checking in",
+		"switching to Al-Minad 250.2",
+		"Al Maynad Tower",
+		"Al Minhad Tower checking in",
+	}
+	for _, s := range cases {
+		if got := guessFieldName(s, nearby, home); got != "Al Minhad" {
+			t.Fatalf("%q -> %q, want Al Minhad", s, got)
+		}
 	}
 }

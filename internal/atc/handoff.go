@@ -399,13 +399,77 @@ func (t *Tower) rollbackHandoffLocked(st *AircraftState) bool {
 
 func (t *Tower) namedField(text string, nearby []airfield.Nearby, home *airfield.Airfield) *airfield.Airfield {
 	name := guessFieldName(text, nearby, home)
-	if name == "" {
+	if name != "" {
+		if af, ok := t.airfields.GetByName(name); ok {
+			return af
+		}
+	}
+	return t.fieldBySpokenFreq(text, nearby, home)
+}
+
+func (t *Tower) fieldBySpokenFreq(text string, nearby []airfield.Nearby, home *airfield.Airfield) *airfield.Airfield {
+	want := spokenFreqKeys(text)
+	if len(want) == 0 {
 		return nil
 	}
-	if af, ok := t.airfields.GetByName(name); ok {
-		return af
+	homeName := ""
+	if home != nil {
+		homeName = strings.ToLower(home.Name)
+	}
+	for _, n := range nearby {
+		if strings.ToLower(n.Name) == homeName {
+			continue
+		}
+		af, ok := t.airfields.GetByName(n.Name)
+		if !ok {
+			continue
+		}
+		for _, s := range append(append([]string{}, af.Frequencies.Tower...), af.Frequencies.Ground...) {
+			if want[freqKeyKHz(s)] {
+				return af
+			}
+		}
 	}
 	return nil
+}
+
+func spokenFreqKeys(text string) map[int]bool {
+	out := map[int]bool{}
+	for i := 0; i < len(text); i++ {
+		if text[i] < '0' || text[i] > '9' {
+			continue
+		}
+		j := i
+		for j < len(text) && text[j] >= '0' && text[j] <= '9' {
+			j++
+		}
+		if j >= len(text) || text[j] != '.' {
+			i = j
+			continue
+		}
+		k := j + 1
+		for k < len(text) && text[k] >= '0' && text[k] <= '9' {
+			k++
+		}
+		if k > j+1 {
+			if f := freqKeyKHz(text[i:k]); f > 0 {
+				out[f] = true
+			}
+		}
+		i = k
+	}
+	return out
+}
+
+func freqKeyKHz(s string) int {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSuffix(strings.ToUpper(s), "AM")
+	s = strings.TrimSuffix(s, "FM")
+	var mhz float64
+	if _, err := fmt.Sscanf(s, "%f", &mhz); err != nil || mhz < 30 {
+		return 0
+	}
+	return int(mhz*1000 + 0.5)
 }
 
 func (t *Tower) airRole(af *airfield.Airfield, onGround bool) Role {
@@ -469,10 +533,10 @@ func uhfOf(af *airfield.Airfield) radio.Frequency {
 }
 
 func fieldNameIn(text, name string) bool {
-	if name == "" {
+	if name == "" || text == "" {
 		return false
 	}
-	return strings.Contains(strings.ToLower(text), strings.ToLower(name))
+	return fieldNameHits(compactField(foldFieldAliases(strings.ToLower(text))), name)
 }
 
 func headingDelta(hdg, brg float64) float64 {
@@ -546,7 +610,22 @@ func (t *Tower) handleHandoffCall(call radio.ReceivedCall) bool {
 		} else if st.Nearest != nil {
 			mapName = st.Nearest.Map
 		}
-		nearby = t.airfields.NearbyOnMap(mapName, st.Latitude, st.Longitude, 10)
+		nearby = t.airfields.NearbyOnMap(mapName, st.Latitude, st.Longitude, 20)
+		push := func(af *airfield.Airfield) {
+			if af == nil {
+				return
+			}
+			for _, n := range nearby {
+				if strings.EqualFold(n.Name, af.Name) {
+					return
+				}
+			}
+			nearby = append(nearby, airfield.Nearby{Name: af.Name, TowerFreq: af.PrimaryTowerFreq()})
+		}
+		push(st.Owner)
+		push(st.Dest)
+		push(st.Prev)
+		push(st.Nearest)
 	}
 	var home *airfield.Airfield
 	if st != nil {
@@ -562,6 +641,28 @@ func (t *Tower) handleHandoffCall(call radio.ReceivedCall) bool {
 	destTalk := containsAny(text, "departing for", "headed to", "heading to", "going to",
 		"enroute to", "en route to", "destination", "inbound to")
 
+	addressedOwner := st != nil && st.Owner != nil && fieldNameIn(foldFieldAliases(text), st.Owner.Name)
+	namedOther := named != nil && st != nil && st.Owner != nil && named.Name != st.Owner.Name
+	checking := intent == IntentRadioCheck || intent == IntentInbound || intent == IntentLanding ||
+		intent == IntentCheckIn ||
+		containsAny(text, "checking in", "check in", "with you")
+
+	become := func(dest *airfield.Airfield) bool {
+		if st == nil || dest == nil {
+			return false
+		}
+		st.Dest = dest
+		t.completeHandoffLocked(st)
+		owner, prev, pilot := st.Owner, st.Prev, st.Callsign
+		t.mu.Unlock()
+		t.execCheckin(owner, prev, pilot)
+		return true
+	}
+
+	// Already talking to the other tower (check-in / "switching to X" without calling the old one).
+	if namedOther && (checking || (contactTalk && !addressedOwner)) {
+		return become(named)
+	}
 	if named != nil && contactTalk && st != nil {
 		act := t.beginHandoff(st, named)
 		t.mu.Unlock()
@@ -577,21 +678,8 @@ func (t *Tower) handleHandoffCall(call radio.ReceivedCall) bool {
 	}
 
 	pending := st != nil && st.Dest != nil && st.Owner != nil && st.Dest.Name != st.Owner.Name && !st.HandoffAt.IsZero()
-	namedOther := named != nil && st != nil && st.Owner != nil && named.Name != st.Owner.Name
-	checking := intent == IntentRadioCheck || intent == IntentInbound || intent == IntentLanding ||
-		containsAny(text, "checking in", "check in", "with you")
-	talkingToOld := st != nil && st.Owner != nil && fieldNameIn(foldFieldAliases(text), st.Owner.Name) &&
-		(named == nil || strings.EqualFold(named.Name, st.Owner.Name))
+	talkingToOld := addressedOwner && !namedOther
 
-	// Named the new tower + check-in / radio check → become that tower (dummy-proof silent tune).
-	if namedOther && checking && !talkingToOld {
-		st.Dest = named
-		t.completeHandoffLocked(st)
-		owner, prev, pilot := st.Owner, st.Prev, st.Callsign
-		t.mu.Unlock()
-		t.execCheckin(owner, prev, pilot)
-		return true
-	}
 	if pending && checking && !talkingToOld {
 		t.completeHandoffLocked(st)
 		owner, prev, pilot := st.Owner, st.Prev, st.Callsign

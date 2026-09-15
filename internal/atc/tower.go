@@ -456,7 +456,7 @@ func runwayList(af *airfield.Airfield) string {
 }
 
 func guessFieldName(transcript string, nearby []airfield.Nearby, home *airfield.Airfield) string {
-	t := foldFieldAliases(strings.ToLower(transcript))
+	t := compactField(foldFieldAliases(strings.ToLower(transcript)))
 	homeName := ""
 	if home != nil {
 		homeName = strings.ToLower(home.Name)
@@ -466,17 +466,48 @@ func guessFieldName(transcript string, nearby []airfield.Nearby, home *airfield.
 		if name == "" || name == homeName {
 			continue
 		}
-		if strings.Contains(t, name) || strings.Contains(t, strings.ReplaceAll(name, "-", "")) {
-			return n.Name
-		}
-		if strings.Contains(t, foldFieldAliases(name)) {
+		if fieldNameHits(t, name) {
 			return n.Name
 		}
 	}
 	return ""
 }
 
+func fieldNameHits(compactTranscript, fieldName string) bool {
+	n := compactField(foldFieldAliases(strings.ToLower(fieldName)))
+	if n != "" && strings.Contains(compactTranscript, n) {
+		return true
+	}
+	words := strings.Fields(strings.ToLower(fieldName))
+	if len(words) == 0 {
+		return false
+	}
+	last := compactField(foldFieldAliases(words[len(words)-1]))
+	if len(last) >= 4 && strings.Contains(compactTranscript, last) {
+		return true
+	}
+	return false
+}
+
+func compactField(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, "-", "")
+	s = strings.ReplaceAll(s, "'", "")
+	s = strings.ReplaceAll(s, " ", "")
+	return s
+}
+
 var fieldAliasPairs = [][2]string{
+	{"al maynad", "al minhad"},
+	{"al-minad", "al minhad"},
+	{"al minad", "al minhad"},
+	{"aminad", "minhad"},
+	{"amaynad", "minhad"},
+	{"maynad", "minhad"},
+	{"minad", "minhad"},
+	{"maktaum", "maktoum"},
+	{"maktoom", "maktoum"},
+	{"maktum", "maktoum"},
 	{"sanaki", "senaki"},
 	{"senahkee", "senaki"},
 	{"senakee", "senaki"},
@@ -489,15 +520,12 @@ var fieldAliasPairs = [][2]string{
 	{"kootasi", "kutaisi"},
 	{"bahtoomee", "batumi"},
 	{"batoomi", "batumi"},
-	{"kobuleti", "kobuleti"},
 	{"kobeleti", "kobuleti"},
 	{"kobeletty", "kobuleti"},
 	{"cobuleti", "kobuleti"},
 	{"coboleti", "kobuleti"},
 	{"nelliss", "nellis"},
-	{"tbilisi", "tbilisi"},
 	{"tuhbeeleesee", "tbilisi"},
-	{"vaziani", "vaziani"},
 	{"vahzeeahnee", "vaziani"},
 }
 
