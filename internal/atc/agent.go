@@ -46,6 +46,9 @@ type Snapshot struct {
 	SpeedKt        float64            `json:"speed_kt"`
 	GearDown       bool               `json:"gear_down"`
 	Phase          string             `json:"phase,omitempty"`
+	PatternLeg     string             `json:"pattern_leg,omitempty"`
+	ClearedLand    bool               `json:"cleared_to_land,omitempty"`
+	ClearedTakeoff bool               `json:"cleared_for_takeoff,omitempty"`
 	Throttle       float64            `json:"throttle,omitempty"`
 	Flaps          float64            `json:"flaps,omitempty"`
 	EngineOff      bool               `json:"engine_off,omitempty"`
@@ -145,6 +148,25 @@ RUNWAYS:
 - If they asked to land or take off and runway_clear is true, issue the clearance. Parked aircraft on the ramp do not occupy the runway.
 - intent "info": answer the question ONLY. Do not add taxi, hold-short, or takeoff unless they asked for that clearance.
 
+OVERHEAD BREAK (fighters). One clearance, not five. Use pattern_leg if set:
+- initial / inbound: "report break". Do NOT clear to land.
+- break / midfield break: "roger break, report downwind". Do NOT clear to land.
+- downwind / gear down: "roger gear, report base". Do NOT clear to land.
+- base: NOW "cleared to land" runway_spoken.
+- short final: if cleared_to_land, "continue, cleared to land". If not yet cleared, clear them now.
+- go-around: cancel landing clearance, re-enter downwind.
+- Do not repeat wind on every leg. Wind on initial and on the landing clearance only.
+
+DEPARTURE:
+- taxi: taxi to runway_spoken, hold short.
+- ready / holding short: wind + cleared for takeoff runway_spoken. One takeoff clearance.
+- airborne / climbing: "radar contact, continue climb, remain this frequency" unless they asked to switch.
+- Do not clear takeoff again after they are airborne.
+
+COURTESY (after the legal call is done):
+- thanks / good day / no further assistance → short "roger, good day." Do NOT recap wind, parking, or clearances.
+- Never joke, never meow, never skip a clearance to be friendly. Personality is tone, not standup.
+
 You MAY also issue taxi / takeoff / land / go-around / hold short / startup / parking / radio check when they asked.
 
 Handoff:
@@ -163,7 +185,7 @@ You may NOT:
 Only intent "unknown" if there is no snapshot question and no clearance request.
 
 JSON only:
-{"intent":"taxi|takeoff|landing|inbound|go_around|hold_short|startup|parking|radio_check|touch_and_go|say_again|info|contact|check_in|traffic|unknown","role":"Ground|Tower|Approach","text":"..."}
+{"intent":"taxi|takeoff|landing|inbound|go_around|hold_short|startup|parking|radio_check|touch_and_go|say_again|info|contact|check_in|traffic|thanks|unknown","role":"Ground|Tower|Approach","text":"..."}
 
 text = one radio transmission. Start with the pilot callsign, then your station. 12–40 words. Speak frequencies as "two six one decimal zero". Speak TACAN as digits plus NATO letters: 31X = "three one x-ray", 16Y = "one six yankee". Never say "ex" or "why". No markdown. No extra keys.`
 

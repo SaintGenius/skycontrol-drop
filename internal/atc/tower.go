@@ -65,6 +65,7 @@ type AircraftState struct {
 	Pitch        float64
 	MotionVS     float64
 	Phase        string // parked, taxi, runway, departure, downwind, base, final, airborne
+	Pattern      string // overhead leg: initial, break, downwind, base, final
 }
 
 // Tower is a simple Tower controller.
@@ -240,6 +241,9 @@ func (t *Tower) HandleRadioCall(call radio.ReceivedCall) bool {
 	if t.handleHandoffCall(call) {
 		return true
 	}
+	if t.handlePatternCall(call) {
+		return true
+	}
 	if DetectIntent(text) != IntentSayAgain {
 		t.mu.Lock()
 		if st := t.primaryLocked(); st != nil {
@@ -348,6 +352,9 @@ func (t *Tower) snapshot(call radio.ReceivedCall) Snapshot {
 		s.SpeedKt = math.Round(st.SpeedMS * 1.94384)
 		s.GearDown = st.LandingGear >= 0.5
 		s.Phase = st.Phase
+		s.PatternLeg = st.Pattern
+		s.ClearedLand = st.ClearedLand
+		s.ClearedTakeoff = st.ClearedTakeoff
 		s.Throttle = st.Throttle
 		s.Flaps = st.Flaps
 		s.EngineOff = st.HasRPM && st.EngineRPM < 0.5
@@ -635,10 +642,11 @@ func (t *Tower) applyDecision(call radio.ReceivedCall, snap Snapshot, d Decision
 		switch d.Intent {
 		case "takeoff":
 			st.ClearedTakeoff = true
-		case "landing", "inbound", "check_in":
+		case "landing":
 			st.ClearedLand = true
 		case "go_around":
 			st.ClearedLand = false
+			st.Pattern = ""
 		}
 	}
 	if role == RoleGround && (st == nil || !st.OnGround) {
@@ -823,6 +831,7 @@ func (t *Tower) handleGoAround(call radio.ReceivedCall) bool {
 	t.say(call.Frequency, cs, msg)
 	if st != nil {
 		st.ClearedLand = false
+		st.Pattern = ""
 		st.LastClearance = time.Now()
 	}
 	t.log.Info("acknowledged go around", "pilot", pilot)
