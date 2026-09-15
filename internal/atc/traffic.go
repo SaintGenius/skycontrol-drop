@@ -198,7 +198,7 @@ func (st *AircraftState) outbound(af *airfield.Airfield) bool {
 	return headingErr(st.Heading, st.bearingTo(af)) >= 125
 }
 
-func runwayHeading(af *airfield.Airfield) float64 {
+func fieldRunwayHdg(af *airfield.Airfield) float64 {
 	if af == nil || len(af.Runways) == 0 {
 		return 0
 	}
@@ -206,7 +206,7 @@ func runwayHeading(af *airfield.Airfield) float64 {
 	if r.HeadingTrue != 0 {
 		return r.HeadingTrue
 	}
-	return r.HeadingMag
+	return runwayHeading(r)
 }
 
 func (st *AircraftState) aglFt(af *airfield.Airfield) float64 {
@@ -274,7 +274,7 @@ func classifyPhase(st *AircraftState) string {
 			return "final"
 		}
 	}
-	rwy := runwayHeading(af)
+	rwy := fieldRunwayHdg(af)
 	if rwy != 0 && dist >= 1.2 && dist <= 5 && agl >= 500 && agl <= 3200 {
 		if headingErr(st.Heading, rwy+180) <= 35 {
 			return "downwind"
