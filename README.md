@@ -1,29 +1,18 @@
-# Sky Control drop — backlog 1–4
+# Sky Control drop — ATIS
 
 This is **not** the whole app. Copy these files **on top of** your existing folder:
 
-`C:\Users\Rob\Downloads\skycontrol\skycontrol\`
+`C:\\Users\\Rob\\Downloads\\skycontrol\\skycontrol\\`
 
-Keep the folder names (`internal\atc\`, `internal\telemetry\`).
-
-## Files
-
-| Copy this | Onto your PC here |
-|-----------|-------------------|
-| `internal/atc/traffic.go` | `internal\atc\traffic.go` *(new)* |
-| `internal/atc/tower.go` | `internal\atc\tower.go` |
-| `internal/atc/agent.go` | `internal\atc\agent.go` |
-| `internal/atc/phraseology.go` | `internal\atc\phraseology.go` |
-| `internal/atc/handoff.go` | `internal\atc\handoff.go` |
-| `internal/telemetry/tacview.go` | `internal\telemetry\tacview.go` |
-
-`traffic_test.go` is optional.
-
-## Then
-
-1. Run **BUILD.bat**
-2. Start DCS + Tacview + SRS
-3. Run **LAUNCH.bat**
+Keep the folder names (`internal\\atc\\`, `internal\\airfield\\`, …).
 
 **Download all as a zip:**  
 https://github.com/SaintGenius/skycontrol-drop/archive/refs/heads/main.zip
+
+## ATIS (this drop)
+
+Second SRS radio. Loops a cached tape on the field ATIS frequency (Senaki = **260.900**). Tower stays on **261.000**.
+
+Ask Ground: **what is the ATIS frequency?**
+
+Then: BUILD.bat → LAUNCH.bat. COM1 261 talk, COM2 260.900 listen.
