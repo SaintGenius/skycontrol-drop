@@ -22,6 +22,7 @@ const (
 	IntentCheckIn      Intent = "check_in"
 	IntentUnable       Intent = "unable"
 	IntentTraffic      Intent = "traffic"
+	IntentATIS         Intent = "atis"
 )
 
 // DetectIntent maps a transcript to a Tower intent.
@@ -45,6 +46,10 @@ func DetectIntent(text string) Intent {
 		return IntentRadioCheck
 	case containsAny(t, "any traffic", "call traffic", "traffic in the area", "do you have traffic"):
 		return IntentTraffic
+	case containsAny(t, "atis", "a t i s", "a tis", "eighty s", "80s", "addis",
+		"information frequency", "atis frequency", "request atis", "copy atis",
+		"what is atis", "what's atis", "atis freq"):
+		return IntentATIS
 	case containsAny(t, "switch to", "switching to", "contacting", "contact ", "change to", "changing to"):
 		return IntentContact
 	case containsAny(t, "go around", "going around", "missed approach", "and around", "go round"):
